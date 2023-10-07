@@ -1,10 +1,10 @@
-name: Update AL-Go System Files
+﻿name: ' Update AL-Go System Files'
 
 on:
   workflow_dispatch:
     inputs:
       templateUrl:
-        description: Template Repository URL (current is https://github.com/freddydk/AL-Go-PTE@main)
+        description: Template Repository URL (current is {TEMPLATEURL})
         required: false
         default: ''
       directCommit:
@@ -17,44 +17,49 @@ permissions:
 
 defaults:
   run:
-    shell: PowerShell
+    shell: powershell
+
+env:
+  ALGoOrgSettings: ${{ vars.ALGoOrgSettings }}
+  ALGoRepoSettings: ${{ vars.ALGoRepoSettings }}
 
 jobs:
   UpdateALGoSystemFiles:
     runs-on: [ windows-latest ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Initialize the workflow
         id: init
-        uses: freddydk/AL-Go-Actions/WorkflowInitialize@main
+        uses: microsoft/AL-Go/Actions/WorkflowInitialize@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
         with:
+          shell: powershell
           eventId: "DO0098"
 
       - name: Read settings
-        uses: freddydk/AL-Go-Actions/ReadSettings@main
+        uses: microsoft/AL-Go/Actions/ReadSettings@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
         with:
-          parentTelemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
-          get: KeyVaultName,GhTokenWorkflowSecretName,TemplateUrl
+          shell: powershell
+          get: templateUrl
 
       - name: Read secrets
-        uses: freddydk/AL-Go-Actions/ReadSecrets@main
-        env:
-          secrets: ${{ toJson(secrets) }}
+        id: ReadSecrets
+        uses: microsoft/AL-Go/Actions/ReadSecrets@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
         with:
-          parentTelemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
-          settingsJson: ${{ env.Settings }}
-          secrets: 'ghTokenWorkflow=${{ env.GHTOKENWORKFLOWSECRETNAME }}'
+          shell: powershell
+          gitHubSecrets: ${{ toJson(secrets) }}
+          getSecrets: 'ghTokenWorkflow'
 
-      - name: Override TemplateUrl
+      - name: Override templateUrl
         env:
           templateUrl: ${{ github.event.inputs.templateUrl }}
         run: |
+          $errorActionPreference = "Stop"; $ProgressPreference = "SilentlyContinue"; Set-StrictMode -Version 2.0
           $templateUrl = $ENV:templateUrl
           if ($templateUrl) {
             Write-Host "Using Template Url: $templateUrl"
-            Add-Content -Path $env:GITHUB_ENV -Value "TemplateUrl=$templateUrl"
+            Add-Content -Encoding UTF8 -Path $env:GITHUB_ENV -Value "templateUrl=$templateUrl"
           }
 
       - name: Calculate DirectCommit
@@ -62,26 +67,29 @@ jobs:
           directCommit: ${{ github.event.inputs.directCommit }}
           eventName: ${{ github.event_name }}
         run: |
+          $errorActionPreference = "Stop"; $ProgressPreference = "SilentlyContinue"; Set-StrictMode -Version 2.0
           $directCommit = $ENV:directCommit
           Write-Host $ENV:eventName
           if ($ENV:eventName -eq 'schedule') {
             Write-Host "Running Update AL-Go System Files on a schedule. Setting DirectCommit = Y"
             $directCommit = 'Y'
           }
-          Add-Content -Path $env:GITHUB_ENV -Value "DirectCommit=$directCommit"
+          Add-Content -Encoding UTF8 -Path $env:GITHUB_ENV -Value "DirectCommit=$directCommit"
 
       - name: Update AL-Go system files
-        uses: freddydk/AL-Go-Actions/CheckForUpdates@main
+        uses: microsoft/AL-Go/Actions/CheckForUpdates@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
         with:
+          shell: powershell
           parentTelemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
-          token: ${{ env.ghTokenWorkflow }}
+          token: ${{ fromJson(steps.ReadSecrets.outputs.Secrets).ghTokenWorkflow }}
           Update: Y
-          templateUrl: ${{ env.TemplateUrl }}
+          templateUrl: ${{ env.templateUrl }}
           directCommit: ${{ env.directCommit }}
 
       - name: Finalize the workflow
         if: always()
-        uses: freddydk/AL-Go-Actions/WorkflowPostProcess@main
+        uses: microsoft/AL-Go/Actions/WorkflowPostProcess@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
         with:
+          shell: powershell
           eventId: "DO0098"
           telemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
