@@ -1,4 +1,6 @@
-name: Add existing app or test app
+﻿name: 'Add existing app or test app'
+
+run-name: "Add existing app or test app in [${{ github.ref_name }}]"
 
 on:
   workflow_dispatch:
@@ -14,6 +16,9 @@ on:
         description: Direct COMMIT (Y/N)
         required: false
         default: 'N'
+      useGhTokenWorkflow:
+        description: Use GhTokenWorkflow for Pull Request/COMMIT
+        type: boolean
 
 permissions:
   contents: write
@@ -21,24 +26,45 @@ permissions:
 
 defaults:
   run:
-    shell: PowerShell
+    shell: powershell
+
+env:
+  ALGoOrgSettings: ${{ vars.ALGoOrgSettings }}
+  ALGoRepoSettings: ${{ vars.ALGoRepoSettings }}
 
 jobs:
   AddExistingAppOrTestApp:
     runs-on: [ windows-latest ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Initialize the workflow
         id: init
-        uses: freddydk/AL-Go-Actions/WorkflowInitialize@main
+        uses: microsoft/AL-Go/Actions/WorkflowInitialize@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
         with:
+          shell: powershell
           eventId: "DO0090"
 
-      - name: Add existing app
-        uses: freddydk/AL-Go-Actions/AddExistingApp@main
+      - name: Read settings
+        uses: microsoft/AL-Go/Actions/ReadSettings@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
         with:
+          shell: powershell
+
+      - name: Read secrets
+        id: ReadSecrets
+        uses: microsoft/AL-Go/Actions/ReadSecrets@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
+        with:
+          shell: powershell
+          gitHubSecrets: ${{ toJson(secrets) }}
+          getSecrets: 'TokenForPush'
+          useGhTokenWorkflowForPush: '${{ github.event.inputs.useGhTokenWorkflow }}'
+
+      - name: Add existing app
+        uses: microsoft/AL-Go/Actions/AddExistingApp@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
+        with:
+          shell: powershell
+          token: ${{ steps.ReadSecrets.outputs.TokenForPush }}
           parentTelemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
           project: ${{ github.event.inputs.project }}
           url: ${{ github.event.inputs.url }}
@@ -46,7 +72,8 @@ jobs:
 
       - name: Finalize the workflow
         if: always()
-        uses: freddydk/AL-Go-Actions/WorkflowPostProcess@main
+        uses: microsoft/AL-Go/Actions/WorkflowPostProcess@6bbfb2b86c33a979e556a96d1510e8e17dbb8ec3
         with:
+          shell: powershell
           eventId: "DO0090"
           telemetryScopeJson: ${{ steps.init.outputs.telemetryScopeJson }}
